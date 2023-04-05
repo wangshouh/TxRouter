@@ -1,0 +1,6 @@
+ds-test/=lib/forge-std/lib/ds-test/src/
+forge-std/=lib/forge-std/src/
+foundry-huff/=lib/foundry-huff/src/
+solidity-stringutils/=lib/foundry-huff/lib/solidity-stringutils/
+solmate/=lib/solmate/src/
+stringutils/=lib/foundry-huff/lib/solidity-stringutils/
