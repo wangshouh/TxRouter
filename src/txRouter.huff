@@ -1,0 +1,32 @@
+#define function multiTransfer(address, uint256[]) nonpayable returns ()
+
+#define macro MULTI_CALLDATA() = takes (1) returns (0) {
+	dup1		// [data, data]
+	shr 0x60	// [to, data]
+	0x20 mstore	// [data]
+	0xffffffffffffffffffffffff
+	and  		// [value]
+	0x40 mstore
+}
+
+
+#define macro MULTI_TRANSFER() = takes(0) returns (0) {
+	0xa9059cbb 0x00 mstore	// [] | [selector]
+		
+	0x44 calldataload		// [length]
+	0x04 calldataload		// [token_address, length]	
+	0x01					// [readed, token_address, length] fix readed
+	0x84					// [next, readed, token_address, length]
+	0x64 calldataload		// [data, next, readed, token_address, length]
+	MULTI_CALLDATA()		// [next, readed, token_address, length]
+
+	0x00 0x00 0x44 0x28 0x00
+	dup8 					// [token_address, value, argsOffset, argsSize, retOffset, retSize, next, readed, token_address, length]
+	gas
+	call 					// [call_flag, next, readed, token_address, length]
+	iszero 
+	call_fail jumpi
+
+	call_fail:
+		0x00 0x00 revert
+}
