@@ -1,0 +1,33 @@
+
+// owner, implementation
+#define macro MAIN() = takes (0) returns (0) {
+	0x04 calldataload	// [owner]
+	0x60 shl
+	0x50 shr
+	0x604f8060093d393df37300000000000000000000000000000000000000003314
+	or
+	0x00 mstore
+
+	0x24 calldataload	// [implementation]
+	dup1				// [implementation, implementation]
+	0x60 shl
+	0x78 shr
+	0x1561004757363d3d373d3d3d363d730000000000000000000000000000000000
+	or
+	0x20 mstore			// [implementation]
+
+	0xe8 shl
+	0x5af43d82803e903d9161004d575b60006000fd5bf30000000000000000
+	or
+	0x40 mstore	
+	0x58 returndatasize returndatasize
+	create
+	dup1
+	succ jumpi
+
+	0x00 0x00 revert  
+
+	succ:
+	0x00 mstore
+	0x20 0x00 return
+}

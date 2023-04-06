@@ -3,12 +3,16 @@ pragma solidity ^0.8.15;
 
 import "foundry-huff/HuffDeployer.sol";
 import "forge-std/Test.sol";
+
 import "./mock/mockERC20.sol";
+// import "../src/TxRouterFactor.sol";
 
 contract txRouterTest is Test {
     MockERC20 private token;
     MockERC20 private approveToken;
     TxRouter private txRouter;
+    TxRouter private txRouterProxy;
+    TxRouterFactory private txRouterFactory;
 
     function setUp() public {
         token = new MockERC20();
@@ -16,8 +20,17 @@ contract txRouterTest is Test {
 
         txRouter = TxRouter(HuffDeployer.deploy("TxRouter"));
 
+        txRouterFactory = TxRouterFactory(HuffDeployer.deploy("TxRouterFactory"));
+        txRouterProxy = TxRouter(txRouterFactory.createTxRouter(address(this), address(txRouter)));
+
         token.transfer(address(txRouter), 1000 ether);
+        token.transfer(address(txRouterProxy), 1000 ether);
+
         approveToken.approve(address(txRouter), 1000 ether);
+
+        // console.log(address(txRouter));
+        // console.log(address(txRouterProxy));
+        // console.log(address(this));
     }
 
     function transferCallDataGenerate(uint256 privateKey, uint96 amount) internal returns (address, uint256) {
@@ -68,10 +81,32 @@ contract txRouterTest is Test {
             address caller = callerArray[i];
             assertEq(approveToken.balanceOf(caller), i * 1000);
         }
-   } 
+    } 
+
+    function test_ProxyTransfer() public {
+        (address caller, uint256 transferData) = transferCallDataGenerate(1, 1000);
+        uint256[] memory callDataArray = new uint256[](1);
+        callDataArray[0] = transferData;
+        txRouterProxy.multiTransfer(address(token), callDataArray);
+        assertEq(token.balanceOf(caller), 1000);
+    }
+
+    function test_NotOwner_Fail() public {
+        (address caller, uint256 transferData) = transferCallDataGenerate(1, 1000);
+        uint256[] memory callDataArray = new uint256[](1);
+        callDataArray[0] = transferData;
+        vm.startPrank(address(1));
+        vm.expectRevert();
+        txRouterProxy.multiTransfer(address(token), callDataArray);
+        vm.stopPrank();
+    }
 }
 
 interface TxRouter {
     function multiTransfer(address, uint256[] memory) external;
     function multiApproveTransfer(address, address, uint256[] memory) external;
+}
+
+interface TxRouterFactory {
+    function createTxRouter(address, address) external returns (address);
 }

@@ -1,0 +1,33 @@
+#define macro MAIN() = takes (0) returns (0) {
+	0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496
+	caller
+	eq
+	iszero
+	revert_block jumpi
+	calldatasize          // [cds]
+	returndatasize        // [0, cds]
+	returndatasize        // [0, 0, cds]
+	calldatacopy          
+	returndatasize        // [0]
+	returndatasize        // [0, 0] 
+	returndatasize        // [0, 0, 0]
+	calldatasize          // [cds, 0, 0, 0]
+	returndatasize        // [0, cds, 0, 0, 0]
+	0xffD4505B3452Dc22f8473616d50503bA9E1710Ac     // [address, 0, cds, 0, 0, 0]
+	gas                   // [gas, address, 0, cds, 0, 0, 0]
+	delegatecall          // [suc, 0]
+	returndatasize        // [rds, suc, 0]
+	dup3                  // [0, rds, suc, 0]
+	dup1                  // [0, 0, rds, suc, 0]
+	returndatacopy        // [suc, 0]
+	swap1                 // [0, suc]
+	returndatasize        // [rds, 0, suc]
+	swap2                 // [suc, 0, rds]
+	succ jumpi
+
+	revert_block:
+	0x00 0x00 revert
+
+	succ:
+	return
+}
