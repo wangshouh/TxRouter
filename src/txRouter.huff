@@ -9,6 +9,13 @@
 	0x40 mstore
 }
 
+#define macro ERC20_TRANSFER() = takes (0) returns (1) {
+	0x00 0x00 0x44 0x1c 0x00
+	dup8 					// [token_address, value, argsOffset, argsSize, retOffset, retSize, next, readed, token_address, length]
+	gas
+	call 					// [call_flag, next, readed, token_address, length] 
+	iszero
+}
 
 #define macro MULTI_TRANSFER() = takes(0) returns (0) {
 	0xa9059cbb 0x00 mstore	// [] | [selector]
@@ -19,16 +26,49 @@
 	0x84					// [next, readed, token_address, length]
 	0x64 calldataload		// [data, next, readed, token_address, length]
 	MULTI_CALLDATA()		// [next, readed, token_address, length]
+	ERC20_TRANSFER()
+	call_fail jumpi			// [next, readed, token_address, length] 
 
-	0x00 0x00 0x44 0x1c 0x00
-	dup8 					// [token_address, value, argsOffset, argsSize, retOffset, retSize, next, readed, token_address, length]
-	gas
-	call 					// [call_flag, next, readed, token_address, length] 
+	array_for:
+	dup1 calldataload		// [data, next, readed, token_address, length]
+	swap1 0x20 add 			// [next, data, readed, token_address, length]
+	swap2 0x01 add 			// [readed, data, next, token_address, length]
+	swap1
+
+	MULTI_CALLDATA()		// [readed, next, token_address, length]
+
+	ERC20_TRANSFER()
+	call_fail jumpi			// [readed, next, token_address, length] 
+
+	dup4					// [length, readed, next, token_address, length]
+	dup2					// [readed, length, readed, next, token_address, length]
+	lt 						// [readed < length, readed, next, token_address, length]
 	iszero
-	call_fail jumpi
+	array_end jumpi			// [readed, next, token_address, length]
+
+	dup2 calldataload		// [data, readed, next, token_address, length]
+	swap1 0x01 add 			// [readed, data, next, token_address, length]
+	swap2 0x20 add 			// [next, data, readed, token_address, length]
+	swap1
+
+	MULTI_CALLDATA()		// [next, readed, token_address, length]
+
+	ERC20_TRANSFER()
+	call_fail jumpi			// [next, readed, token_address, length] 
+	dup4					// [length, next, readed, token_address, length]
+
+	dup3					// [readed, length, next, readed, token_address, length]
+	lt 						// [readed < length, next, readed, token_address, length]
+	iszero
+	array_end jumpi			// [next, readed, token_address, length]
+
+	array_for jump
+
+	array_end:
 	0x20 0x00 return
+
 	call_fail:
-		0x00 0x00 revert
+	0x00 0x00 revert
 }
 
 #define macro MAIN() = takes (0) returns (0) {
@@ -39,3 +79,8 @@
 	multiTransfer:
 		MULTI_TRANSFER()
 }
+
+// 	dup4					// [length, next, readed, token_address, length]
+//	dup3					// [readed, length, next, readed, token_address, length]
+//	lt iszero				// [readed >= length, next, readed, token_address, length]
+//	array_end jumpi

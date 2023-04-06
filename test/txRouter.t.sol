@@ -21,15 +21,26 @@ contract txRouterTest is Test {
         return (transferReceiver, abi.decode(abi.encodePacked(transferReceiver, amount), (uint256)));
     }
 
-    function test_OnePersonTransfer() public {
-        (address caller, uint256 mockCalldata) = transferCallDataGenerate(1, 1000);
-        // console.log(mockCalldata);
-        // console.log(caller);
-        uint256[] memory callDataArray = new uint256[](1);
-        callDataArray[0] = mockCalldata;
+    function test_multiTransfer(uint256 n) public {
+
+        n = bound(n, 1, 1024);
+
+        address[] memory callerArray = new address[](n);
+        uint256[] memory callDataArray = new uint256[](n);
+
+        for (uint96 i = 0; i < n; i++) {
+            uint256 pk = i + 1;
+            (address caller, uint256 mockCalldata) = transferCallDataGenerate(pk, i * 1000);
+            callerArray[i] = caller;
+            callDataArray[i] = mockCalldata;
+        }
 
         txRouter.multiTransfer(address(token), callDataArray);
-        assertEq(token.balanceOf(caller), 1000);
+
+        for (uint256 i = 0; i < n; i++) {
+            address caller = callerArray[i];
+            assertEq(token.balanceOf(caller), i * 1000);
+        }
     }
     
 }
