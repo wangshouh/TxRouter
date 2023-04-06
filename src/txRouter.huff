@@ -79,8 +79,3 @@
 	multiTransfer:
 		MULTI_TRANSFER()
 }
-
-// 	dup4					// [length, next, readed, token_address, length]
-//	dup3					// [readed, length, next, readed, token_address, length]
-//	lt iszero				// [readed >= length, next, readed, token_address, length]
-//	array_end jumpi
