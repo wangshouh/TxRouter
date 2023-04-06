@@ -1,4 +1,5 @@
 #define function multiTransfer(address, uint256[]) nonpayable returns ()
+#define function multiApproveTransfer(address, address, uint256[]) nonpayable returns ()
 
 #define macro MULTI_CALLDATA() = takes (1) returns (0) {
 	dup1		// [data, data]
@@ -9,11 +10,25 @@
 	0x40 mstore
 }
 
+#define macro MULTI_APPROVE_CALLDATA() = takes(1) returns (0) {
+	dup1		// [data, data]
+	0x60 shr	// [to, data]
+	0x40 mstore	// [data]
+	0xffffffffffffffffffffffff
+	and 0x60 mstore
+}
+
 #define macro ERC20_TRANSFER() = takes (0) returns (1) {
 	0x00 0x00 0x44 0x1c 0x00
 	dup8 					// [token_address, value, argsOffset, argsSize, retOffset, retSize, next, readed, token_address, length]
 	gas
 	call 					// [call_flag, next, readed, token_address, length] 
+	iszero
+}
+
+#define macro APPROVE_TRANSFER() = takes (0) returns (1) {
+	0x00 0x00 0x64 0x1c 0x00
+	dup8 gas call
 	iszero
 }
 
@@ -71,11 +86,84 @@
 	0x00 0x00 revert
 }
 
+#define macro MULTI_APPROVE_TRANSFER() = takes (0) returns (0) {
+	0x23b872dd 0x00 mstore		// [] | [transferFrom_selector]
+	0x04 calldataload			// [from]
+	0x20 mstore
+
+	0x64 calldataload			// [length]
+	0x24 calldataload			// [token_address, length]	
+
+	0x01						// [readed, token_address, length] fix readed
+	0xa4						// [next, readed, token_address, length]
+	0x84 calldataload			// [data, next, readed, token_address, length]
+
+	MULTI_APPROVE_CALLDATA()	// [next, readed, token_address, length]
+
+	APPROVE_TRANSFER()
+
+	call_fail jumpi
+
+	array_for:
+	dup1 calldataload		// [data, next, readed, token_address, length]
+	swap1 0x20 add 			// [next, data, readed, token_address, length]
+	swap2 0x01 add 			// [readed, data, next, token_address, length]
+	swap1
+
+	MULTI_APPROVE_CALLDATA()
+
+	APPROVE_TRANSFER()
+
+	call_fail jumpi			// [readed, next, token_address, length] 
+
+	dup4					// [length, readed, next, token_address, length]
+	dup2					// [readed, length, readed, next, token_address, length]
+	lt 						// [readed < length, readed, next, token_address, length]
+	iszero
+	array_end jumpi			// [readed, next, token_address, length]
+
+	dup4					// [length, readed, next, token_address, length]
+	dup2					// [readed, length, readed, next, token_address, length]
+	lt 						// [readed < length, readed, next, token_address, length]
+	iszero
+	array_end jumpi			// [readed, next, token_address, length]
+
+	dup2 calldataload		// [data, readed, next, token_address, length]
+	swap1 0x01 add 			// [readed, data, next, token_address, length]
+	swap2 0x20 add 			// [next, data, readed, token_address, length]
+	swap1
+
+	MULTI_APPROVE_CALLDATA()		// [next, readed, token_address, length]
+
+	APPROVE_TRANSFER()
+	
+	call_fail jumpi			// [next, readed, token_address, length] 
+	dup4					// [length, next, readed, token_address, length]
+
+	dup3					// [readed, length, next, readed, token_address, length]
+	lt 						// [readed < length, next, readed, token_address, length]
+	iszero
+	array_end jumpi			// [next, readed, token_address, length]
+
+	array_for jump
+
+	0x20 0x00 return
+
+	call_fail:
+	0x00 0x00 revert
+}
+
+
 #define macro MAIN() = takes (0) returns (0) {
 	0x00 calldataload 0xE0 shr
 
 	dup1 __FUNC_SIG(multiTransfer) eq multiTransfer jumpi
+	dup1 __FUNC_SIG(multiApproveTransfer) eq multiApproveTransfer jumpi
 
 	multiTransfer:
 		MULTI_TRANSFER()
+
+	multiApproveTransfer:
+		MULTI_APPROVE_TRANSFER()
+
 }
