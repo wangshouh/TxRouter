@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
 import "foundry-huff/HuffDeployer.sol";
@@ -16,8 +16,13 @@ interface TxRouter {
     function multiAggregate(address, address, uint256, PermitCall[] memory) external;
 }
 
+interface TxRouterFactory {
+    function createTxRouter(address, address) external returns (address);
+}
+
 contract Deploy is Script {
-  function run() public returns (TxRouter txRouter) {
+  function run() public returns (TxRouter txRouter, TxRouterFactory txRouterFactory) {
     txRouter = TxRouter(HuffDeployer.broadcast("TxRouter"));
+    txRouterFactory = TxRouterFactory(HuffDeployer.broadcast("TxRouterFactory"));
   }
 }
