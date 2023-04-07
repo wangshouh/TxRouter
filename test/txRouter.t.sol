@@ -3,20 +3,26 @@ pragma solidity ^0.8.15;
 
 import "foundry-huff/HuffDeployer.sol";
 import "forge-std/Test.sol";
+import "forge-std/console.sol";
 
 import "./mock/mockERC20.sol";
-// import "../src/TxRouterFactor.sol";
+import "./tool/SigUtils.sol";
 
 contract txRouterTest is Test {
     MockERC20 private token;
     MockERC20 private approveToken;
+
     TxRouter private txRouter;
     TxRouter private txRouterProxy;
+
     TxRouterFactory private txRouterFactory;
+
+    SigUtils internal sigUtils;
 
     function setUp() public {
         token = new MockERC20();
         approveToken = new MockERC20();
+        sigUtils = new SigUtils(token.DOMAIN_SEPARATOR());
 
         txRouter = TxRouter(HuffDeployer.deploy("TxRouter"));
 
@@ -36,6 +42,12 @@ contract txRouterTest is Test {
     function transferCallDataGenerate(uint256 privateKey, uint96 amount) internal returns (address, uint256) {
         address transferReceiver = vm.addr(privateKey);
         return (transferReceiver, abi.decode(abi.encodePacked(transferReceiver, amount), (uint256)));
+    }
+
+    function permitCalldataGenerate(address spender, uint96 deadline, address owner, uint88 value, uint8 v) internal pure returns (uint256, uint256) {
+        uint256 spenderDeadline = abi.decode(abi.encodePacked(spender, deadline), (uint256));
+        uint256 ownerValueV = abi.decode(abi.encodePacked(owner, value, v), (uint256));
+        return (spenderDeadline, ownerValueV);
     }
 
     function test_multiTransfer(uint256 n) public {
@@ -100,11 +112,51 @@ contract txRouterTest is Test {
         txRouterProxy.multiTransfer(address(token), callDataArray);
         vm.stopPrank();
     }
+
+    function test_multiAggregate() public {
+        uint256 ownerPrivateKey = 0x1;
+        address owner = vm.addr(ownerPrivateKey);
+
+        address receiver = address(0xdead);
+
+        token.transfer(owner, 1 ether);
+
+        SigUtils.Permit memory permit = SigUtils.Permit({
+            owner: owner,
+            spender: address(txRouter),
+            value: 1e18,
+            nonce: 0,
+            deadline: 1 days
+        });
+
+        bytes32 digest = sigUtils.getTypedDataHash(permit);
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
+
+        (uint256 spenderDDL, uint256 permitCalldata) = permitCalldataGenerate(
+            address(txRouter), 1 days, address(owner), 1e18, v
+        );
+
+        TxRouter.PermitCall[] memory permitCallDataArray = new TxRouter.PermitCall[](1);
+
+        permitCallDataArray[0] = TxRouter.PermitCall(permitCalldata, r, s);
+
+        txRouter.multiAggregate(address(token), receiver, spenderDDL, permitCallDataArray);
+
+        assertEq(token.balanceOf(receiver), 1e18);
+    }
 }
 
 interface TxRouter {
+    struct PermitCall {
+        uint256 ownerValueV;
+        bytes32 r;
+        bytes32 s; 
+    }
+
     function multiTransfer(address, uint256[] memory) external;
     function multiApproveTransfer(address, address, uint256[] memory) external;
+    function multiAggregate(address, address, uint256, PermitCall[] memory) external;
 }
 
 interface TxRouterFactory {

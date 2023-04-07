@@ -18,6 +18,28 @@
 	and 0x60 mstore
 }
 
+#define macro PERMIT_SPENDER_DEADLINE() = takes (1) returns (0) {
+	dup1		// [spender + deadline, spender + deadline]
+	0x60 shr	// [spender, spender + deadline]
+	0x40 mstore
+	0xffffffffffffffffffffffff
+	and 0x80 mstore
+}
+
+#define macro OWNER_VALUE_V() = takes (1) returns (0) {
+	dup1 dup1			// [owner_value_v, owner_value_v, owner_value_v]
+	0x60 shr 			// [owner, owner_value_v, owner_value_v]
+	dup1 0x20 mstore	// [owner, owner_value_v, owner_value_v]
+	0x120 mstore
+	0xffffffffffffffffffffff00
+	and 0x08 shr		// [value, owner_value_v]
+	dup1				// [value, value, owner_value_v]
+	0x60 mstore			// [value, owner_value_v]
+	0x160 mstore		// [owner_value_v]
+	0xff and 			// [v]
+	0xa0 mstore
+}
+
 #define macro ERC20_TRANSFER() = takes (0) returns (1) {
 	0x00 0x00 0x44 0x1c 0x00
 	dup8 					// [token_address, value, argsOffset, argsSize, retOffset, retSize, next, readed, token_address, length]
@@ -29,6 +51,15 @@
 #define macro APPROVE_TRANSFER() = takes (0) returns (1) {
 	0x00 0x00 0x64 0x1c 0x00
 	dup8 gas call
+	iszero
+}
+
+#define macro PERMIT_TRANSFER() = takes (0) returns (1) {
+	0x00 0x00 0xe4 0x1c 0x00 
+	dup9 gas call
+	pop
+	0x00 0x00 0x64 0x11c 0x00
+	dup9 gas call
 	iszero
 }
 
@@ -136,7 +167,7 @@
 	MULTI_APPROVE_CALLDATA()		// [next, readed, token_address, length]
 
 	APPROVE_TRANSFER()
-	
+
 	call_fail jumpi			// [next, readed, token_address, length] 
 	dup4					// [length, next, readed, token_address, length]
 
@@ -153,12 +184,40 @@
 	0x00 0x00 revert
 }
 
+#define macro MULTI_AGGREGATE() = takes (0) returns (0) {
+	0xd505accf 0x00 mstore
+	0x23b872dd 0x100 mstore
+
+	0x04 calldataload		// [token_address]
+	0x24 calldataload		// [receiver, token_address]
+	0x140 mstore			// [token_address]
+
+	0x44 calldataload		// [spender+deadline, token_address]
+	PERMIT_SPENDER_DEADLINE()
+	0x84 calldataload		// [length, token_address]
+
+	0x01 					// [readed, length, token_address]
+
+	0xa4 dup1				// [ptr, ptr, readed, length, token_address]
+	calldataload			// [owner+value+v, ptr, readed, length, token_address]
+	OWNER_VALUE_V()			// [ptr, readed, length, token_address]
+	0x20 add dup1			// [ptr, ptr, readed, length, token_address]
+	calldataload			// [r, ptr, readed, length, token_address]
+	0xc0 mstore				// [ptr, readed, length, token_address]
+	0x20 add dup1			// [ptr, ptr, readed, length, token_address]
+	calldataload			// [s, ptr, readed, length, token_address]
+	0xe0 mstore				// [ptr, readed, length, token_address]
+	PERMIT_TRANSFER()
+	call_fail jumpi			// [ptr, readed, length, token_address]
+}
+
 
 #define macro MAIN() = takes (0) returns (0) {
 	0x00 calldataload 0xE0 shr
 
 	dup1 __FUNC_SIG(multiTransfer) eq multiTransfer jumpi
 	dup1 __FUNC_SIG(multiApproveTransfer) eq multiApproveTransfer jumpi
+	dup1 0xe35a7e94 eq multiAggregate jumpi
 
 	multiTransfer:
 		MULTI_TRANSFER()
@@ -166,4 +225,6 @@
 	multiApproveTransfer:
 		MULTI_APPROVE_TRANSFER()
 
+	multiAggregate:
+		MULTI_AGGREGATE()
 }
