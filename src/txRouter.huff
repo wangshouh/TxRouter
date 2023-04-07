@@ -200,6 +200,24 @@
 
 	0xa4 dup1				// [ptr, ptr, readed, length, token_address]
 	calldataload			// [owner+value+v, ptr, readed, length, token_address]
+
+	OWNER_VALUE_V()			// [ptr, readed, length, token_address]
+
+	0x20 add dup1			// [ptr, ptr, readed, length, token_address]
+	calldataload			// [r, ptr, readed, length, token_address]
+	0xc0 mstore				// [ptr, readed, length, token_address]
+	0x20 add dup1			// [ptr, ptr, readed, length, token_address]
+	calldataload			// [s, ptr, readed, length, token_address]
+	0xe0 mstore				// [ptr, readed, length, token_address]
+
+	PERMIT_TRANSFER()
+
+	call_fail jumpi			// [ptr, readed, length, token_address]
+
+	array_for:
+	swap1 0x01 add 			// [readed, ptr, length, token_address]
+	swap1 0x20 add dup1		// [ptr, ptr, readed, length, token_address]
+	calldataload
 	OWNER_VALUE_V()			// [ptr, readed, length, token_address]
 	0x20 add dup1			// [ptr, ptr, readed, length, token_address]
 	calldataload			// [r, ptr, readed, length, token_address]
@@ -209,6 +227,18 @@
 	0xe0 mstore				// [ptr, readed, length, token_address]
 	PERMIT_TRANSFER()
 	call_fail jumpi			// [ptr, readed, length, token_address]
+
+	dup3 dup3				// [readed, length, ptr, readed, length, token_address]
+	lt iszero
+	array_end jumpi
+
+	array_for jump
+
+	array_end:
+	0x20 0x00 return
+
+	call_fail:
+	0x00 0x00 revert
 }
 
 

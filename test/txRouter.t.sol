@@ -44,10 +44,26 @@ contract txRouterTest is Test {
         return (transferReceiver, abi.decode(abi.encodePacked(transferReceiver, amount), (uint256)));
     }
 
-    function permitCalldataGenerate(address spender, uint96 deadline, address owner, uint88 value, uint8 v) internal pure returns (uint256, uint256) {
-        uint256 spenderDeadline = abi.decode(abi.encodePacked(spender, deadline), (uint256));
+    function permitCalldataGenerate(uint256 privateKey, uint88 value) internal returns (TxRouter.PermitCall memory) {
+        address owner = vm.addr(privateKey);
+        
+        token.transfer(owner, value);
+
+        SigUtils.Permit memory permit = SigUtils.Permit({
+            owner: owner,
+            spender: address(txRouter),
+            value: value,
+            nonce: 0,
+            deadline: 1 days
+        });
+
+        bytes32 digest = sigUtils.getTypedDataHash(permit);
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        
         uint256 ownerValueV = abi.decode(abi.encodePacked(owner, value, v), (uint256));
-        return (spenderDeadline, ownerValueV);
+        
+        return TxRouter.PermitCall(ownerValueV, r, s);
     }
 
     function test_multiTransfer(uint256 n) public {
@@ -113,37 +129,26 @@ contract txRouterTest is Test {
         vm.stopPrank();
     }
 
-    function test_multiAggregate() public {
-        uint256 ownerPrivateKey = 0x1;
-        address owner = vm.addr(ownerPrivateKey);
-
+    function test_multiAggregate(uint256 n) public {
         address receiver = address(0xdead);
 
-        token.transfer(owner, 1 ether);
+        uint96 deadline = 1 days;
+        uint256 spenderDDL = abi.decode(abi.encodePacked(address(txRouter), deadline), (uint256));
 
-        SigUtils.Permit memory permit = SigUtils.Permit({
-            owner: owner,
-            spender: address(txRouter),
-            value: 1e18,
-            nonce: 0,
-            deadline: 1 days
-        });
+        n = bound(n, 1, 1024);
 
-        bytes32 digest = sigUtils.getTypedDataHash(permit);
+        uint256 transferSum;
+        TxRouter.PermitCall[] memory permitCallDataArray = new TxRouter.PermitCall[](n);
 
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
-
-        (uint256 spenderDDL, uint256 permitCalldata) = permitCalldataGenerate(
-            address(txRouter), 1 days, address(owner), 1e18, v
-        );
-
-        TxRouter.PermitCall[] memory permitCallDataArray = new TxRouter.PermitCall[](1);
-
-        permitCallDataArray[0] = TxRouter.PermitCall(permitCalldata, r, s);
+        for (uint88 i = 0; i < n; i++) {
+            uint88 pk = i + 1;
+            permitCallDataArray[i] = permitCalldataGenerate(pk, pk * 1000);
+            transferSum += pk * 1000;
+        } 
 
         txRouter.multiAggregate(address(token), receiver, spenderDDL, permitCallDataArray);
 
-        assertEq(token.balanceOf(receiver), 1e18);
+        assertEq(token.balanceOf(receiver), transferSum);
     }
 }
 
