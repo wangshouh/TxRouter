@@ -12,8 +12,12 @@ def main():
 		hex_amount = hex(amount)[2:].zfill(24)
 		multi_transfer.append(receiver_address + hex_amount)
 
-	print(multi_transfer)
+	result = "["
+	for i in multi_transfer:
+		result += i
+	result += "]"
 
+	print(result)
 
 if __name__ == '__main__':
 	main()
